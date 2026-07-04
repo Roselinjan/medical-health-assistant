@@ -19,3 +19,5 @@ pypdfium2_cfg/
 pypdfium2_cli/
 *.pyd
 *.exe
+.streamlit/secrets.toml
+**/secrets.toml
