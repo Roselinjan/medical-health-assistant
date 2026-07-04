@@ -1,20 +1,21 @@
-# Lambda dependencies
-medical-processor/PyPDF2/
-medical-processor/pypdf2-3.0.1.dist-info/
-medical-processor/*.zip
-
-# Python
-__pycache__/
-*.pyc
+bin/
+cffi/
+cffi-2.0.0.dist-info/
+charset_normalizer/
+charset_normalizer-3.4.7.dist-info/
+cryptography/
+cryptography-49.0.0.dist-info/
+pdfminer/
+pdfminer_six-20260107.dist-info/
+pdfplumber/
+pdfplumber-0.11.10.dist-info/
+pillow-12.3.0.dist-info/
+pycparser/
+pycparser-3.0.dist-info/
+pypdfium2/
+pypdfium2-5.11.0.dist-info/
+pypdfium2_raw/
+pypdfium2_cfg/
+pypdfium2_cli/
 *.pyd
-
-# Streamlit secrets
-medical-processor/frontend/.streamlit/secrets.toml
-
-# VS Code
-.vscode/
-
-PIL/
-medical-processor/PyPDF2/
-medical-processor/__pycache__/
-*.pyd
+*.exe
