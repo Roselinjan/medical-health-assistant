@@ -1,0 +1,15 @@
+# Lambda dependencies
+medical-processor/PyPDF2/
+medical-processor/pypdf2-3.0.1.dist-info/
+medical-processor/*.zip
+
+# Python
+__pycache__/
+*.pyc
+*.pyd
+
+# Streamlit secrets
+medical-processor/frontend/.streamlit/secrets.toml
+
+# VS Code
+.vscode/
