@@ -13,3 +13,8 @@ medical-processor/frontend/.streamlit/secrets.toml
 
 # VS Code
 .vscode/
+
+PIL/
+medical-processor/PyPDF2/
+medical-processor/__pycache__/
+*.pyd
