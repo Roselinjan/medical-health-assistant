@@ -92,13 +92,23 @@ def show_login():
             if not name or not email:
                 st.error("Please fill in all fields.")
             else:
-                # auto-generate patient ID
-                patient_id = f"PAT-{uuid.uuid4().hex[:6].upper()}"
+                # Step 1: check if this email already has a patient_id
+                response = requests.get(f"{API_BASE_URL}/patient", params={"email": email})
+
+                if response.status_code == 200:
+                    patient_id = response.json()["patient_id"]
+                else:
+                    # Step 2: no existing patient — create one
+                    create_response = requests.post(
+                        f"{API_BASE_URL}/patient",
+                        json={"email": email}
+                    )
+                    patient_id = create_response.json()["patient_id"]
+
                 st.session_state.patient_id = patient_id
                 st.session_state.patient_name = name
                 st.session_state.patient_email = email
                 st.rerun()
-
 
 # ── PAGE 2 — UPLOAD ──
 def show_upload():
@@ -184,6 +194,7 @@ def show_upload():
 # ── PAGE 3 — SUMMARY + CHAT ──
 def show_summary_and_chat():
     st.title(f"🏥 {st.session_state.patient_name}'s Report")
+    st.markdown(f"**Patient ID:** `{st.session_state.patient_id}`")
     st.markdown("---")
 
     # summary section
@@ -240,6 +251,12 @@ def show_summary_and_chat():
                     f'<div class="chat-message-bot">{message["content"]}</div>',
                     unsafe_allow_html=True
                 )
+                
+                sources = message.get('sources', [])
+                if sources:
+                    with st.expander("📄 View Source"):
+                        for src in sources:
+                            st.write(src)
 
         # chat input
         with st.form("chat_form", clear_on_submit=True):
@@ -255,6 +272,7 @@ def show_summary_and_chat():
                     'content': question
                 })
 
+                
                 with st.spinner("Finding answer from your report..."):
                     try:
                         chat_response = requests.post(
@@ -264,16 +282,19 @@ def show_summary_and_chat():
                                 "patient_id": st.session_state.patient_id
                             }
                         )
-                        answer = chat_response.json().get('answer', 'Sorry, I could not find an answer.')
+                        response_json = chat_response.json()
+                        answer = response_json.get('answer', 'Sorry, I could not find an answer.')
+                        sources = response_json.get('sources', [])  
                     except Exception as e:
                         answer = f"Error: {str(e)}"
+                        sources = []
 
                 st.session_state.chat_history.append({
                     'role': 'assistant',
-                    'content': answer
+                    'content': answer,
+                    'sources': sources  
                 })
                 st.rerun()
-
 
 # ── MAIN ROUTER ──
 def main():
