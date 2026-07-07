@@ -5,6 +5,7 @@ An AI-powered assistant that helps patients understand their blood test reports.
 Built as a hands-on AWS/AI portfolio project during a career transition into cloud and AI engineering.
 
 ---
+🔗 **Live App:** [medical-health-assistant-g8gkdydgzsbjs5xlumhsyf.streamlit.app](https://medical-health-assistant-g8gkdydgzsbjs5xlumhsyf.streamlit.app/)
 
 ## Architecture
 
