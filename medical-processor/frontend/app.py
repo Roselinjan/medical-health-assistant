@@ -162,6 +162,9 @@ def show_upload():
                 report_date = s3_key.split('/')[2]
                 filename = s3_key.split('/')[3]
                 sort_key = f"{report_date}#{filename}"
+                st.session_state.current_document_id = sort_key
+                st.session_state.current_report_date = report_date      
+                st.session_state.current_report_filename = filename   
 
                 max_attempts = 20
                 for attempt in range(max_attempts):
@@ -181,7 +184,7 @@ def show_upload():
                             if summary_data.get('summary'):
                                 st.session_state.summary = summary_data['summary']
                                 st.session_state.critical_values = summary_data.get('critical_values', [])
-                                st.session_state.chat_ready_at = time.time() + 45
+                                st.session_state.chat_ready_at = time.time() + 30
                                 st.session_state.report_uploaded = True
                                 st.rerun()
                     except Exception as e:
@@ -239,6 +242,9 @@ def show_summary_and_chat():
     else:
         st.caption("Ask me anything about your medical report in simple language.")
 
+        if st.session_state.get('current_document_id'):
+            st.info(f"💬 Answering from: **{st.session_state.current_report_filename}** ({st.session_state.current_report_date})")
+
         # display chat history
         for message in st.session_state.chat_history:
             if message['role'] == 'user':
@@ -279,7 +285,8 @@ def show_summary_and_chat():
                             f"{API_BASE_URL}/chat",
                             json={
                                 "question": question,
-                                "patient_id": st.session_state.patient_id
+                                "patient_id": st.session_state.patient_id,
+                                "document_id": st.session_state.current_document_id 
                             }
                         )
                         response_json = chat_response.json()
