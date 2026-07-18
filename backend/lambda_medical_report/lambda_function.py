@@ -5,6 +5,7 @@ import re
 import time
 from datetime import datetime
 from decimal import Decimal
+import uuid
 
 s3_client = boto3.client('s3')
 textract_client = boto3.client('textract')
@@ -12,15 +13,16 @@ bedrock_client = boto3.client('bedrock-runtime', region_name='ap-south-1')
 dynamodb = boto3.resource('dynamodb')  
 table = dynamodb.Table('medical-reports')  
 bedrock_agent_client = boto3.client('bedrock-agent-runtime',region_name='ap-south-1')
+bedrock_agent_mgmt_client = boto3.client('bedrock-agent', region_name='ap-south-1')
 cloudwatch = boto3.client('cloudwatch', region_name='ap-south-1')
 
 
 INFERENCE_PROFILE_ID = 'apac.amazon.nova-pro-v1:0'
-KB_ID = 'UPJ8PKBRJG'
-DS_ID = 'F9R2M66CF2'
+KB_ID = 'LBWMRHXRZM'
+DS_ID = 'RZLSNAPFY6'
 
 NORMAL_RANGES = {
-    'hemoglobin': {'min': 12.0, 'max': 17.5, 'unit': 'g/dL', 'display_name': 'Hemoglobin'},
+    'hemoglobin': {'min': 12.6, 'max': 17.5, 'unit': 'g/dL', 'display_name': 'Hemoglobin'},
     'wbc': {'min': 4000, 'max': 11000, 'unit': '/cmm', 'display_name': 'WBC Count'},
     'mch': {'min': 27.0,'max': 32.0,'unit': 'pg','display_name': 'MCH'},
     'platelet': {'min': 150000, 'max': 400000, 'unit': '/cmm', 'display_name': 'Platelet Count'},
@@ -32,8 +34,9 @@ NORMAL_RANGES = {
     'hba1c': {'min': 4.0, 'max': 5.7, 'unit': '%', 'display_name': 'HbA1c'},
     'sgpt': {'min': 7, 'max': 56, 'unit': 'U/L', 'display_name': 'SGPT (Liver)'},
     'sgot': {'min': 10, 'max': 40, 'unit': 'U/L', 'display_name': 'SGOT (Liver)'},
-    'creatinine': {'min': 0.6, 'max': 1.2, 'unit': 'mg/dL', 'display_name': 'Creatinine (Kidney)'},
-    'tsh': {'min': 0.4, 'max': 4.0, 'unit': 'mIU/L', 'display_name': 'TSH (Thyroid)'}
+    'creatinine': {'min': 0.6, 'max': 1.5, 'unit': 'mg/dL', 'display_name': 'Creatinine (Kidney)'},
+    'tsh': {'min': 0.4, 'max': 4.0, 'unit': 'mIU/L', 'display_name': 'TSH (Thyroid)'},
+    'eosinophils': {'min': 0, 'max': 6, 'unit': '%', 'display_name': 'Eosinophils'}
 }
 
 def normalize_platelet(value):
@@ -131,43 +134,47 @@ def extract_with_textract(bucket, key):
     return extracted_text
 
 
-def summarize_with_bedrock(extracted_text, patient_id):
+def summarize_with_bedrock(extracted_text, patient_id, critical_values):
+    lines = []
+    for item in critical_values:
+        line = f"{item['parameter']}: {item['value']} {item['unit']} ({item['status']}, normal range {item['min']}-{item['max']})"
+        lines.append(line)
+
+    if not lines:
+        critical_values_text = "No critical values detected — all values are within normal range."
+    else:
+        critical_values_text = "\n".join(lines)
+
     prompt = f"""You are a caring medical assistant helping patients
-understand their medical reports.
+                understand their medical reports.
 
-Patient ID: {patient_id}
+                Patient ID: {patient_id}
 
-Medical Report:
-{extracted_text}
+                Medical Report:
+                {extracted_text}
 
-Please provide:
-1. A brief 2-line overview
-2. Key findings in simple bullet points
-3. Critical values prefixed with ⚠️
-4. End with: "Please consult your doctor for personalized advice"
+                The following values have ALREADY been determined to be abnormal (do not re-evaluate or second-guess these — treat them as confirmed facts):
+                {critical_values_text}
 
-Maximum 300 words. Use simple English, avoid medical jargon.
-Do not start with phrases like "Sure" or "Here's".
-Do not use markdown headers like ###.
-Use plain bullet points only."""
+                Please provide:
+                1. A brief 2-line overview
+                2. Key findings in simple bullet points
+                3. Prefix ONLY the values listed above with ⚠️ — do not mark any other value as abnormal yourself
+                4. End with: "Please consult your doctor for personalized advice"
+
+                Maximum 300 words. Use simple English, avoid medical jargon.
+                Do not start with phrases like "Sure" or "Here's".
+                Do not use markdown headers like ###.
+                Use plain bullet points only."""
 
     response = bedrock_client.converse(
         modelId=INFERENCE_PROFILE_ID,
-        messages=[
-            {
-                "role": "user",
-                "content": [{"text": prompt}]
-            }
-        ],
-        inferenceConfig={
-            "maxTokens": 1000,
-            "temperature": 0.3
-        }
+        messages=[{"role": "user", "content": [{"text": prompt}]}],
+        inferenceConfig={"maxTokens": 1000, "temperature": 0.3}
     )
     summary = response['output']['message']['content'][0]['text']
     print(f"Summary generated successfully")
     return summary
-
 
 def extract_critical_values(extracted_text):
     critical_values = []
@@ -192,32 +199,6 @@ def extract_critical_values(extracted_text):
                 })
     return critical_values
 
-def query_knowledge_base(question, patient_id):
-    response = bedrock_agent_client.retrieve_and_generate(
-        input={
-            'text': question  
-        },
-        retrieveAndGenerateConfiguration={
-            'type': 'KNOWLEDGE_BASE',  
-            'knowledgeBaseConfiguration': {
-                'knowledgeBaseId': KB_ID,  
-                'modelArn': 'arn:aws:bedrock:ap-south-1:847399098942:inference-profile/apac.amazon.nova-pro-v1:0',
-                'retrievalConfiguration': {
-                    'vectorSearchConfiguration': {
-                        'filter': {
-                            'equals': {  
-                                'key': 'patient_id',
-                                'value': patient_id
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    )
-    
-    answer = response['output']['text']  
-    return answer
 
 def publish_metric(metric_name, value=1, unit='Count'):
     cloudwatch.put_metric_data(
@@ -279,11 +260,15 @@ def lambda_handler(event, context):
         )
         print(f"Saved extracted text: {txt_key}")
 
+
+
         # save metadata file for KB patient_id filtering
         metadata_key = txt_key + '.metadata.json'
         metadata = {
             "metadataAttributes": {
-                "patient_id": patient_id
+                "patient_id": patient_id,
+                "report_date": sort_key,
+                "document_id": sort_key
             }
         }
         s3_client.put_object(
@@ -294,13 +279,14 @@ def lambda_handler(event, context):
         )
         print(f"Saved metadata: {metadata_key}")
 
-
-        # 5. Summarize with Bedrock
-        summary = summarize_with_bedrock(extracted_text, patient_id)
-
         # 6. Extract critical values
+
         critical_values = extract_critical_values(extracted_text)
         print(f"Critical values found: {len(critical_values)}")
+
+        # 5. Summarize with Bedrock
+
+        summary = summarize_with_bedrock(extracted_text, patient_id, critical_values)
 
         save_to_dynamodb(
             patient_id=patient_id,
@@ -309,8 +295,18 @@ def lambda_handler(event, context):
             summary=summary,
             critical_values=critical_values,
             extracted_text=extracted_text
+            
         )
         publish_metric('PDFsProcessed') 
+        # Trigger KB sync so the chatbot can immediately query this new report
+        try:
+            bedrock_agent_mgmt_client.start_ingestion_job(
+                knowledgeBaseId=KB_ID,
+                dataSourceId=DS_ID
+            )
+            print("KB sync triggered")
+        except Exception as sync_error:
+            print(f"KB sync trigger failed: {str(sync_error)}")
 
 
 
@@ -322,8 +318,8 @@ def lambda_handler(event, context):
                 'key': key,
                 'summary': summary,
                 'critical_values': critical_values
-               
-        })}
+                    
+        }, default=decimal_to_float)}
 
     except Exception as e:
         print(f"Error: {str(e)}")

@@ -281,17 +281,21 @@ def show_summary_and_chat():
                 
                 with st.spinner("Finding answer from your report..."):
                     try:
+                        st.write(f"🔍 DEBUG sending session_id: {st.session_state.get('session_id')}")
                         chat_response = requests.post(
                             f"{API_BASE_URL}/chat",
                             json={
                                 "question": question,
                                 "patient_id": st.session_state.patient_id,
-                                "document_id": st.session_state.current_document_id 
+                                "document_id": st.session_state.current_document_id ,
+                                "session_id": st.session_state.get('session_id')
                             }
                         )
                         response_json = chat_response.json()
                         answer = response_json.get('answer', 'Sorry, I could not find an answer.')
                         sources = response_json.get('sources', [])  
+                        st.session_state.session_id = response_json.get('session_id')
+                        st.write(f"🔍 DEBUG just set session_id: {st.session_state.session_id}")
                     except Exception as e:
                         answer = f"Error: {str(e)}"
                         sources = []

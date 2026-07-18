@@ -21,3 +21,16 @@ pypdfium2_cli/
 *.exe
 .streamlit/secrets.toml
 **/secrets.toml
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+venv/
+.venv/
+.idea/
+.vscode/
+.DS_Store
+
+*.log
